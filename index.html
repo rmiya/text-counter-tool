@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <title>文字数カウントツール</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    textarea { width: 100%; height: 300px; margin-bottom: 10px; }
+    button { padding: 10px 20px; }
+    .result { margin-top: 10px; font-weight: bold; }
+    .removed { color: red; text-decoration: line-through; white-space: pre-wrap; display: block; margin-bottom: 5px; }
+    .extracted { margin-top: 10px; padding: 10px; background: #f4f4f4; white-space: pre-wrap; border: 1px solid #ccc; }
+  </style>
+</head>
+<body>
+  <h1>文字数カウントツール</h1>
+  <textarea id="inputText" placeholder="コードエディターHTMLをここに貼り付けてください"></textarea>
+  <button onclick="countCharacters()">文字数をカウント</button>
+  <div class="extracted" id="extractedText"></div>
+  <div class="result" id="result"></div>
+
+  <script>
+    function countCharacters() {
+      const rawHTML = document.getElementById("inputText").value;
+
+      const headingRegex = /<!-- wp:heading -->\s*<h2[^>]*>(.*?)<\/h2>\s*<!-- \/wp:heading -->/gs;
+      const paragraphRegex = /<!-- wp:paragraph -->\s*<p(?! class=\"has-small-font-size\")(.*?)<\/p>\s*<!-- \/wp:paragraph -->/gs;
+      const captionRegex = /<figcaption[^>]*>(.*?)<\/figcaption>/gs;
+      const shortcodeRegex = /\[.*?\]/g;
+
+      let removedItems = [];
+      let textArray = [];
+      let cutoffIndex = rawHTML.indexOf("<!--nextpage-->");
+      const contentToUse = cutoffIndex !== -1 ? rawHTML.slice(0, cutoffIndex) : rawHTML;
+
+      // 段落と見出しの順に、パターンマッチしながら処理
+      const allMatches = [...contentToUse.matchAll(/<!-- wp:(paragraph|heading)[^>]* -->[\s\S]*?<!-- \/wp:\1 -->/g)];
+      for (const match of allMatches) {
+        const block = match[0];
+
+        if (/wp:paragraph/.test(block)) {
+          if (/class=\"has-small-font-size\"/.test(block)) {
+            continue; // 提供行はカウント対象に含める
+          }
+          const inner = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+          if (inner) textArray.push(inner[1].replace(/<[^>]+>/g, '').trim());
+        }
+
+        if (/wp:heading/.test(block)) {
+          const inner = block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/);
+          if (inner) {
+            const headingText = inner[1].trim();
+            if (/撮影テクニック|もっと見る|再生/.test(headingText)) {
+              removedItems.push(headingText);
+              continue; // 汎用的な除外ワードを含む見出しは除外
+            }
+            textArray.push(headingText);
+          }
+        }
+      }
+
+      // 除外対象（キャプション・ショートコード）※画像提供は除外しない
+      const captions = [...rawHTML.matchAll(captionRegex)].map(m => m[1]);
+      removedItems.push(...captions);
+      const shortcodes = [...rawHTML.matchAll(shortcodeRegex)].map(m => m[0]);
+      removedItems.push(...shortcodes);
+
+      // 本文連結と文字数カウント
+      const textOnly = textArray.join('\n');
+      const charCount = textOnly.replace(/\s+/g, '').length;
+
+      // 表示構築
+      const extractedDiv = document.getElementById("extractedText");
+      extractedDiv.textContent = textOnly;
+
+      const resultDiv = document.getElementById("result");
+      resultDiv.innerHTML = `
+        総文字数（空白除く）: <span>${charCount}</span><br>
+        ${removedItems.length > 0 ? '<hr><strong>除外された内容:</strong><br>' + removedItems.map(item => `<span class='removed'>${item}</span>`).join('') : ''}
+      `;
+    }
+  </script>
+</body>
+</html>
