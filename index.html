@@ -1,9 +1,10 @@
 <!DOCTYPE html>
+
 <html lang="ja">
 <head>
-  <meta charset="UTF-8">
-  <title>文字数カウントツール</title>
-  <style>
+<meta charset="utf-8"/>
+<title>文字数カウントツール</title>
+<style>
     body { font-family: sans-serif; padding: 20px; }
     textarea { width: 100%; height: 300px; margin-bottom: 10px; }
     button { padding: 10px 20px; }
@@ -13,13 +14,21 @@
   </style>
 </head>
 <body>
-  <h1>文字数カウントツール</h1>
-  <textarea id="inputText" placeholder="コードエディターHTMLをここに貼り付けてください"></textarea>
-  <button onclick="countCharacters()">文字数をカウント</button>
-  <div class="extracted" id="extractedText"></div>
-  <div class="result" id="result"></div>
-
-  <script>
+<label for="genre">ジャンル選択：</label>
+<select id="genre" onchange="updateRichAdvice(parseInt(document.getElementById('currentLength').value || 0))">
+<option value="knitting">編み物・裁縫・リメイク</option>
+<option value="diy">DIY・リフォーム・工作</option>
+<option value="cooking">弁当・料理</option>
+</select>
+<label for="currentLength" style="display: none;">現在の文字数（空白除く）:</label>
+<input id="currentLength" style="display: none;" type="number" value="0"/>
+<div class="result" id="richAdvice"></div>
+<h1>文字数カウントツール</h1>
+<textarea id="inputText" oninput="countCharacters()" placeholder="コードエディターHTMLをここに貼り付けてください"></textarea>
+<button onclick="countCharacters()" style="display: none;">文字数をカウント</button>
+<div class="extracted" id="extractedText"></div>
+<div class="result" id="result"></div>
+<script>
     function countCharacters() {
       const rawHTML = document.getElementById("inputText").value;
 
@@ -68,17 +77,117 @@
       // 本文連結と文字数カウント
       const textOnly = textArray.join('\n');
       const charCount = textOnly.replace(/\s+/g, '').length;
+    const summaryCountSpan = document.getElementById("summaryCount");
+    if (summaryCountSpan) summaryCountSpan.textContent = charCount;
 
       // 表示構築
       const extractedDiv = document.getElementById("extractedText");
       extractedDiv.textContent = textOnly;
 
       const resultDiv = document.getElementById("result");
-      resultDiv.innerHTML = `
+    const summaryCountSpan = document.getElementById("summaryCount");
+    resultDiv.innerHTML = `
         総文字数（空白除く）: <span>${charCount}</span><br>
         ${removedItems.length > 0 ? '<hr><strong>除外された内容:</strong><br>' + removedItems.map(item => `<span class='removed'>${item}</span>`).join('') : ''}
       `;
     }
   </script>
+<script>
+  function countCharacters() {
+    const rawHTML = document.getElementById("inputText").value;
+
+    const headingRegex = /<!-- wp:heading -->\s*<h2[^>]*>(.*?)<\/h2>\s*<!-- \/wp:heading -->/gs;
+    const paragraphRegex = /<!-- wp:paragraph -->\s*<p(?! class=\"has-small-font-size\")(.*?)<\/p>\s*<!-- \/wp:paragraph -->/gs;
+    const captionRegex = /<figcaption[^>]*>(.*?)<\/figcaption>/gs;
+    const shortcodeRegex = /\[.*?\]/g;
+
+    let removedItems = [];
+    let textArray = [];
+    let cutoffIndex = rawHTML.indexOf("<!--nextpage-->");
+    const contentToUse = cutoffIndex !== -1 ? rawHTML.slice(0, cutoffIndex) : rawHTML;
+
+    const allMatches = [...contentToUse.matchAll(/<!-- wp:(paragraph|heading)[^>]* -->[\s\S]*?<!-- \/wp:\1 -->/g)];
+    for (const match of allMatches) {
+      const block = match[0];
+
+      if (/wp:paragraph/.test(block)) {
+        if (/class=\"has-small-font-size\"/.test(block)) {
+          continue;
+        }
+        const inner = block.match(/<p[^>]*>([\s\S]*?)<\/p>/);
+        if (inner) textArray.push(inner[1].replace(/<[^>]+>/g, '').trim());
+      }
+
+      if (/wp:heading/.test(block)) {
+        const inner = block.match(/<h2[^>]*>([\s\S]*?)<\/h2>/);
+        if (inner) {
+          const headingText = inner[1].trim();
+          if (/撮影テクニック|もっと見る|再生/.test(headingText)) {
+            removedItems.push(headingText);
+            continue;
+          }
+          textArray.push(headingText);
+        }
+      }
+    }
+
+    const captions = [...rawHTML.matchAll(captionRegex)].map(m => m[1]);
+    removedItems.push(...captions);
+    const shortcodes = [...rawHTML.matchAll(shortcodeRegex)].map(m => m[0]);
+    removedItems.push(...shortcodes);
+
+    const textOnly = textArray.join('\n');
+    const charCount = textOnly.replace(/\s+/g, '').length;
+
+    const extractedDiv = document.getElementById("extractedText");
+    extractedDiv.textContent = textOnly;
+
+    const resultDiv = document.getElementById("result");
+    resultDiv.innerHTML = `
+      総文字数（空白除く）: <span>${charCount}</span><br>
+      ${removedItems.length > 0 ? '<hr><strong>除外された内容:</strong><br>' + removedItems.map(item => `<span class='removed'>${item}</span>`).join('') : ''}
+    `;
+
+    document.getElementById('currentLength').value = charCount;
+    updateRichAdvice(charCount);
+  }
+
+  function updateRichAdvice(length) {
+    const genre = document.getElementById('genre').value;
+    const gaps = {
+      to1300: 1300 - length,
+      to1600: 1600 - length,
+      to2000: 2000 - length
+    };
+    let message = `<p><strong>あと${gaps.to1300 > 0 ? gaps.to1300 : 0}文字で1300文字</strong><br>
+      あと${gaps.to1600 > 0 ? gaps.to1600 : 0}文字で1600文字<br>
+      あと${gaps.to2000 > 0 ? gaps.to2000 : 0}文字で2000文字</p>`;
+
+    const suggestions = {
+      knitting: [
+        ['毛糸や布の選び方・理由', '例：ダイソーの極太毛糸は初心者でも編みやすく、仕上がりもふっくら。1玉でバッグが1つ編めました。'],
+        ['模様や段ごとの工夫', '例：編み図ではなく段ごとに配色を変えることで、自分らしい表情に仕上げました。'],
+        ['サイズ感・着用イメージ・使い道', '例：大人が肩にかけてぴったり収まるサイズ。通勤バッグとしても使えそうです。']
+      ],
+      diy: [
+        ['材料や道具の調達方法', '例：セリアの木製板を使い、玄関に置けるミニ棚をDIY。300円以内で完成しました。'],
+        ['制作手順で悩んだ点や工夫した点', '例：ネジ穴が目立たないようL字金具を内側に設置しました。'],
+        ['使ってみた感想や家族の反応', '例：夫に「売ってるみたい」と言われてうれしかったです。']
+      ],
+      cooking: [
+        ['材料のこだわりや代用食材', '例：にんじんは皮付きのまま使うことで甘みと栄養をキープ。'],
+        ['作り方のコツ・時短ポイント', '例：炒め物はあらかじめレンジ加熱しておくと時短になります。'],
+        ['味の感想・家族の反応・アレンジ案', '例：子どもが「また作って」と言ってくれたお気に入りメニューです。']
+      ]
+    };
+
+    message += `<h3>追加するとよい要素（例）</h3><ul>`;
+    suggestions[genre].forEach(([label, example]) => {
+      message += `<li>${label}<br><span style="color:gray;font-size:90%"> ${example}</span></li>`;
+    });
+    message += `</ul>`;
+    document.getElementById('richAdvice').innerHTML = message;
+  }
+</script>
 </body>
 </html>
