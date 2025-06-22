@@ -181,9 +181,9 @@
       ]
     };
 
-    message += `<h3>追加するとよい要素（例）</h3><ul>`;
+    message += `<h3>追加するとよい要素</h3><ul>`;
     suggestions[genre].forEach(([label, example]) => {
-      message += `<li>${label}<br><span style="color:gray;font-size:90%"> ${example}</span></li>`;
+      message += `<li>${label}</li>`;
     });
     message += `</ul>`;
     document.getElementById('richAdvice').innerHTML = message;
